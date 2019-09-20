@@ -1,19 +1,19 @@
 {
 
   "manifest_version": 1,
-  "name": "Zoom",
+  "name": "Meet Tony",
   "version": "1.0",
 
   "description": "Quickly fly through websites with predictive navigation.",
 
   "icons": {
-    "48": "icons/zoom-48.png"
+    "48": "icons/tony-48.png"
   },
 
   "content_scripts": [
     {
       "matches": ["*://*.mozilla.org/*"],
-      "js": ["zoom.js"]
+      "js": ["meet_tony.js"]
     }
   ]
 
