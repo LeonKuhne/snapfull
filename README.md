@@ -9,4 +9,4 @@ To speed up website navigation, Tony keeps track of the most clicked buttons, wi
 ## Done
 - Development print function implemented
 - Store buttons pressed in cache
-- Highlight button
+- Highlight most popular button
