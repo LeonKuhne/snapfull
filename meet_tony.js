@@ -1,8 +1,10 @@
 const font_size = 10
 const dbname = 'tonydb'
 const pageUrl = window.location.href
-const fail = (s) => console.error(`tony: ${s}`)
-const info = (s) => console.info(`tony: ${s}`)
+const log = (s,l) => l(`tony: ${s[0]}`, ...s.splice(1))
+const err = (...s) => log(s, console.error)
+const info = (...s) => log(s, console.info)
+const debug = (...s) => log(s, console.debug)
 const OUTLINE_CLASS = "tonys-helper"
 const MAX_CLICKS = 5
 let selected = null
@@ -71,10 +73,13 @@ function pageKey(key) {
 function load() {
   let storage = window.localStorage.getItem(dbname)
   if (storage == null || storage == "[]") {
-    fail('no entries exist'); return null
+    return null
   }
-  try { return JSON.parse(storage) }
-  catch(e) { console.error('mem not loaded') }
+  try {
+    return JSON.parse(storage)
+  } catch(e) {
+    fail('mem not loaded')
+  }
 }
 
 function save(entries) {
@@ -82,52 +87,30 @@ function save(entries) {
     dbname, JSON.stringify(entries))
 }
 
-/* DEPRICATED: replaced by recentFrequent
-function mostFrequent() {
-  let entries = load()
-  let bestCount = 0
-  let best = null 
-  for (entry in entries) {
-    let count = entries[entry]
-    let keys = entry.split('|')
-    let url = keys[0]
-    if (url == pageUrl && count > bestCount) {
-      bestCount = count
-      best = {
-        query: keys[1],
-        idx: keys[2]
-      }
-    }
-  }
-  return best 
-}
-*/
-
-function recentFrequent() {
+function recentFrequent(idx=0) {
   let entries = load()
   if (!entries) return null
-  let bestTime = 0
-  let best = null 
-  console.log('recent frequent; entries', entries)
+  let bests = []
   for (entry in entries) {
     let keys = parseEntry(entry)
     // find highest timestamp
     let url = keys[0]
     if (url == pageUrl) {
       let timestamps = parseStamps(entries[entry])
-      let totalTime = timestamps
-        .reduce((s,t) => s+t, 0) 
+      let totalTime = timestamps.reduce((s,t) => s+t, 0) 
       // update best time
-      if (totalTime > bestTime) {
-        bestTime = totalTime
-        best = {
-          query: keys[1],
-          idx: keys[2]
-        }
+      if (!bests.length || totalTime > bests[0].time) {
+        bests.push({
+          time: totalTime,
+          key: {
+            query: keys[1],
+            idx: keys[2]
+          }
+        })
       }
     }
   }
-  return best 
+  return bests[idx]?.key
 }
 
 function parseEntry(str) {
@@ -166,40 +149,22 @@ function stamp(pageItem, maxLength=MAX_CLICKS) {
   }
 }
 
-/* DEPRICATED: replaced by stamp
-function increment(pageItem) {
-  let entries = load()
-  let keys = parseEntry(pageItem)
-  url = keys[0]
-  // only execute on current page
-  if (url == pageUrl) {
-    if (entries) {
-      if (entries[pageItem]) {
-        entries[pageItem] += 1
-      } else {
-        entries[pageItem] = 1
-      }
-    } else {
-      entries = { [pageItem]: 1 }
-    }
-    save(entries)
-  }
-}
-*/
-
 /**
  * INTERACT
 **/
 
-function aliasDoubletap(key, callback, delay=DOUBLE_TAP_DELAY) {
+let repeatedClicks = 0
+function aliasRepeatedTaps(key, callback, delay=DOUBLE_TAP_DELAY) {
   document.addEventListener("keyup", (e) => {
     let now = Date.now()
     if (e.which == key) {
       // pressed twice quickly
       if (now < lastPressed + delay) {
-        callback()
+        callback(repeatedClicks)
+        repeatedClicks += 1
       } else {
         lastPressed = now
+        repeatedClicks = 0
       }
     }
   })
@@ -243,32 +208,62 @@ function selectElem(elem) {
   outline(elem)
 }
 
-function trySelect(key, tries=3) {
-  elem = select(key)
-  console.log("trying select")
-  // retry 
-  if (elem === null && tries > 0) {
-    setTimeout(() => trySelect(key, tries-1), 1000)
-    return
+DEFAULT_RETRY = {
+  msg: "retrying...",
+  isDone: x => !!x,
+  onDone: () => undefined,
+  tries: 5,
+  delay: 100
+}
+function retry(callback, options={}) {
+  const o = {...DEFAULT_RETRY, ...options}
+  let result = callback() 
+  if (o.isDone(result)) {
+    o.onDone(result)
+  } else if (o.tries) {
+    setTimeout(() => {
+      debug(o.msg, result)
+      retry(callback, {...o,
+        tries: o.tries-1})
+    }, o.delay)
   }
 }
 
+function trySelect(key) {
+  retry(() => select(key), {
+    msg: "selecting...",
+    isDone: elem => elem === null,
+    onDone: elem => {
+      if (elem === false) info("no history")
+    }
+  })
+}
+
 function select(key) {
-  if (!key) {
-    info("nothing to outline")
-    return false
-  }
+  if (!key) return false
   elem = getElem(key)
   selectElem(elem)
   return elem
 }
 
 function scores() {
-  let entries = load()
+  const entries = load()
   console.info("Tony's Visits:")
   for (entry in entries) {
-    parts = parseEntry(entry)
-    console.info(`- ${parts[1]}:`, parseInt(parts[2]))
+    // find details
+    const keys = parseEntry(entry)
+    const query = keys[1]
+    const idx = keys[2]
+    // beautify dates
+    console.log(entries, entry)
+    const timestamps = parseStamps(entries[entry])
+    const dates = timestamps
+      .map(t => new Date(t).toISOString())
+    // display
+    console.info(`- ${query}[${idx}]`)
+    for (date of dates) {
+      console.info(`  ${date}`)
+    }
   }
 }
 
@@ -280,16 +275,18 @@ function main() {
   // show most clicked
   trySelect(recentFrequent())
   // add shortcut, 190 = '.'
-  aliasDoubletap(190, () => {
-    info('auto-clicking')
+  aliasRepeatedTaps(190, (idx) => {
+    info('auto-clicking', idx)
     key = getKey(selected)
     stamp(pageKey(key))
     selected.click()
+    trySelect(recentFrequent(idx+1))
   })
   // listen for clicks
-  document.body.addEventListener('click', e => {
+  window.addEventListener('mousedown', e => {
     let key = getKey(e.target)
     if (key) {
+      info(`you clicked on ${key}`)
       stamp(pageKey(key))
       trySelect(recentFrequent())
     }
@@ -299,18 +296,15 @@ function main() {
 }
 
 // wait for dom to be ready
-function checkReady(tries=3, delay=100) {
-  state = document.readyState
-  if (state === "complete") {
-    try {
-      main()
-    } catch(err) {
-      console.log('err', err)
+function checkReady() {
+  retry(() => document.readyState, {
+    msg: "waiting...",
+    isDone: state => state === "complete",
+    onDone: () => {
+      try { main() }
+      catch(err) { fail(err) }
     }
-  } else {
-    info(`dom not yet ready: ${state}`)
-    setTimeout(() => checkReady(tries-1, delay), delay)
-  }
+  })
 }
 
 checkReady()
