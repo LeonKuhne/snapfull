@@ -2,7 +2,7 @@ const font_size = 10
 const dbname = 'tonydb'
 const pageUrl = window.location.href
 const log = (s,l) => l(`tony: ${s[0]}`, ...s.splice(1))
-const err = (...s) => log(s, console.error)
+const fail = (...s) => log(s, console.error)
 const info = (...s) => log(s, console.info)
 const debug = (...s) => log(s, console.debug)
 const OUTLINE_CLASS = "tonys-helper"
@@ -15,27 +15,89 @@ let selected = null
 
 function getKeyIdx(query, elem) {
   results = getElems(query)
+  console.log("getting key idx", results)
   if (results) {
     idx = results.indexOf(elem)
     if (idx >= 0) { return idx }
-    else { fail("key too generic") }
-  } else { fail("key invalid") }
+    else { fail("query too generic", query, results) }
+  } else { fail("query invalid", query) }
   return null
 }
 
+function simulate(element, eventName)
+{
+    var options = extend(defaultOptions, arguments[2] || {});
+    var oEvent, eventType = null;
+
+    for (var name in eventMatchers)
+    {
+        if (eventMatchers[name].test(eventName)) { eventType = name; break; }
+    }
+
+    if (!eventType)
+        throw new SyntaxError('Only HTMLEvents and MouseEvents interfaces are supported');
+
+    if (document.createEvent)
+    {
+        oEvent = document.createEvent(eventType);
+        if (eventType == 'HTMLEvents')
+        {
+            oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+        }
+        else
+        {
+            oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable, document.defaultView,
+            options.button, options.pointerX, options.pointerY, options.pointerX, options.pointerY,
+            options.ctrlKey, options.altKey, options.shiftKey, options.metaKey, options.button, element);
+        }
+        element.dispatchEvent(oEvent);
+    }
+    else
+    {
+        options.clientX = options.pointerX;
+        options.clientY = options.pointerY;
+        var evt = document.createEventObject();
+        oEvent = extend(evt, options);
+        element.fireEvent('on' + eventName, oEvent);
+    }
+    return element;
+}
+
+function extend(destination, source) {
+    for (var property in source)
+      destination[property] = source[property];
+    return destination;
+}
+
+var eventMatchers = {
+    'HTMLEvents': /^(?:load|unload|abort|error|select|change|submit|reset|focus|blur|resize|scroll)$/,
+    'MouseEvents': /^(?:click|dblclick|mouse(?:down|up|over|move|out))$/
+}
+var defaultOptions = {
+    pointerX: 0,
+    pointerY: 0,
+    button: 0,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    bubbles: true,
+    cancelable: true
+}
+
 function attrToString(attr) {
-  include = true
-  // remove outline indicator
   if (attr.name === "class") {
+    // remove outline indicator
     if (attr.value) {
       attr.value = attr.value
         .split(' ')
         .filter(c => c != OUTLINE_CLASS)
         .join(' ')
     }
-    include = attr.value ? true : false
+    // return class
+    return `.${attr.value}` ? attr.value : ""
   }
-  if (!include) { return null }
+  // return attribute
   return `[${attr.name}="${attr.value}"]`
 }
 
@@ -44,10 +106,7 @@ function getKey(elem) {
   let attrMap = elem.attributes
   for (let idx=0; idx<attrMap.length; idx++) {
     attr = attrMap.item(idx)
-    queryPart = attrToString(attrMap.item(idx))
-    if (queryPart) {
-      query += queryPart 
-    }
+    query += attrToString(attrMap.item(idx))
   }
   // find index
   idx = getKeyIdx(query, elem)
@@ -170,6 +229,22 @@ function aliasRepeatedTaps(key, callback, delay=DOUBLE_TAP_DELAY) {
   })
 }
 
+function click(elem) {
+  // find location
+  let rect = elem.getBoundingClientRect()
+  const x = (rect.left + rect.right) / 2
+  const y = (rect.top + rect.bottom) / 2
+  // create events
+  let down = new PointerEvent(
+    'pointerdown', {clientX: x, clientY: y});
+  let up = new PointerEvent(
+    'pointerup', {clientX: x, clientY: y});
+  // submit events
+  info("clicking", down, up)
+  elem.dispatchEvent(down);
+  window.dispatchEvent(up);
+}
+
 /**
  * INDICATE
 **/
@@ -186,13 +261,15 @@ function loadCss(css) {
 }
 
 function outline(elem) {
-  classes = elem.classList
-  classes.add(OUTLINE_CLASS)
+  // define css
   loadCss(`.${OUTLINE_CLASS} {
     border-color: purple;
     border-style: solid;
     border-width: 4px;
   }`)
+  // add classes
+  classes = elem.classList
+  classes.add(OUTLINE_CLASS)
 }
 
 function deselectElem(elem) {
@@ -206,6 +283,7 @@ function selectElem(elem) {
   if (selected) deselectElem(selected)
   selected = elem
   outline(elem)
+  info("selecting elem")
 }
 
 DEFAULT_RETRY = {
@@ -213,7 +291,7 @@ DEFAULT_RETRY = {
   isDone: x => !!x,
   onDone: () => undefined,
   tries: 5,
-  delay: 100
+  delay: 400
 }
 function retry(callback, options={}) {
   const o = {...DEFAULT_RETRY, ...options}
@@ -232,7 +310,7 @@ function retry(callback, options={}) {
 function trySelect(key) {
   retry(() => select(key), {
     msg: "selecting...",
-    isDone: elem => elem === null,
+    isDone: elem => elem !== null,
     onDone: elem => {
       if (elem === false) info("no history")
     }
@@ -255,7 +333,6 @@ function scores() {
     const query = keys[1]
     const idx = keys[2]
     // beautify dates
-    console.log(entries, entry)
     const timestamps = parseStamps(entries[entry])
     const dates = timestamps
       .map(t => new Date(t).toISOString())
@@ -276,17 +353,17 @@ function main() {
   trySelect(recentFrequent())
   // add shortcut, 190 = '.'
   aliasRepeatedTaps(190, (idx) => {
-    info('auto-clicking', idx)
     key = getKey(selected)
     stamp(pageKey(key))
-    selected.click()
+    //click(selected)
+    simulate(selected, "click")
     trySelect(recentFrequent(idx+1))
   })
   // listen for clicks
   window.addEventListener('mousedown', e => {
     let key = getKey(e.target)
     if (key) {
-      info(`you clicked on ${key}`)
+      info("clicking...", key)
       stamp(pageKey(key))
       trySelect(recentFrequent())
     }
