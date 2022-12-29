@@ -1,7 +1,7 @@
-# Meet-Tony
-Firefox extension for quick navigation.
+# Fast-Nav
+Browser extension for quick navigation.
 
-To speed up website navigation, Tony keeps track of the most clicked buttons, with keyboard shortcuts for clicking those buttons.
+Indicates suggested clicks and provides shortcuts by keeping track of recent clicks.
 
 ## Todo
 - Additional repeated clicks queue up next best click
