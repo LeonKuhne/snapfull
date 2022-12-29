@@ -13,3 +13,10 @@ function test() {
 function dev() {
   alert "to debug run (re)load the extension in your browser"
 }
+
+function build() {
+  rm -rf build && mkdir build
+  cp manifest.json build/
+  cp fast-nav.js build/
+  zip -r fast-nav.zip build
+}

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Fast Nav",
+  "name": "Meet Tony",
   "version": "1.1",
-  "description": "Suggest and automate common clicks",
+  "description": "Fly through websites with frequent action suggestions.",
   "icons": {
-    "48": "icons/fast-nav-48.png"
+    "48": "icons/tony-48.png"
   },
   "content_scripts": [
     {
@@ -12,7 +12,8 @@
         "<all_urls>"
       ],
       "js": [
-        "fast-nav.js"
+        "lib/jquery.min.js",
+        "meet_tony.js"
       ],
       "run_at": "document_end"
     }
