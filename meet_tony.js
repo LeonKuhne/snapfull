@@ -15,7 +15,6 @@ let selected = null
 
 function getKeyIdx(query, elem) {
   results = getElems(query)
-  console.log("getting key idx", results)
   if (results) {
     idx = results.indexOf(elem)
     if (idx >= 0) { return idx }
@@ -95,7 +94,7 @@ function attrToString(attr) {
         .join(' ')
     }
     // return class
-    return `.${attr.value}` ? attr.value : ""
+    let clazz = attr.value ? `.${attr.value}` : ""
   }
   // return attribute
   return `[${attr.name}="${attr.value}"]`
@@ -103,13 +102,13 @@ function attrToString(attr) {
 
 function getKey(elem) {
   let query = elem.tagName.toLowerCase()
-  let attrMap = elem.attributes
+  const attrMap = elem.attributes
   for (let idx=0; idx<attrMap.length; idx++) {
     attr = attrMap.item(idx)
     query += attrToString(attrMap.item(idx))
   }
   // find index
-  idx = getKeyIdx(query, elem)
+  const idx = getKeyIdx(query, elem)
   return { query, idx }
 }
 
@@ -214,7 +213,7 @@ function stamp(pageItem, maxLength=MAX_CLICKS) {
 
 let repeatedClicks = 0
 function aliasRepeatedTaps(key, callback, delay=DOUBLE_TAP_DELAY) {
-  document.addEventListener("keyup", (e) => {
+  document.addEventListener("keydown", (e) => {
     let now = Date.now()
     if (e.which == key) {
       // pressed twice quickly
@@ -227,22 +226,6 @@ function aliasRepeatedTaps(key, callback, delay=DOUBLE_TAP_DELAY) {
       }
     }
   })
-}
-
-function click(elem) {
-  // find location
-  let rect = elem.getBoundingClientRect()
-  const x = (rect.left + rect.right) / 2
-  const y = (rect.top + rect.bottom) / 2
-  // create events
-  let down = new PointerEvent(
-    'pointerdown', {clientX: x, clientY: y});
-  let up = new PointerEvent(
-    'pointerup', {clientX: x, clientY: y});
-  // submit events
-  info("clicking", down, up)
-  elem.dispatchEvent(down);
-  window.dispatchEvent(up);
 }
 
 /**
@@ -326,7 +309,7 @@ function select(key) {
 
 function scores() {
   const entries = load()
-  console.info("Tony's Visits:")
+  console.debug("Tony's Visits:")
   for (entry in entries) {
     // find details
     const keys = parseEntry(entry)
@@ -337,11 +320,26 @@ function scores() {
     const dates = timestamps
       .map(t => new Date(t).toISOString())
     // display
-    console.info(`- ${query}[${idx}]`)
+    console.debug(`- ${query}[${idx}]`)
     for (date of dates) {
-      console.info(`  ${date}`)
+      console.debug(`  ${date}`)
     }
   }
+}
+
+/**
+ * LISTEN
+**/
+
+function listen() {
+  document.addEventListener('mousedown', e => {
+    let key = getKey(e.target)
+    if (key) {
+      info("clicking...", key)
+      stamp(pageKey(key))
+      trySelect(recentFrequent())
+    }
+  })
 }
 
 /**
@@ -353,21 +351,13 @@ function main() {
   trySelect(recentFrequent())
   // add shortcut, 190 = '.'
   aliasRepeatedTaps(190, (idx) => {
-    key = getKey(selected)
-    stamp(pageKey(key))
-    //click(selected)
     simulate(selected, "click")
+    stamp(pageKey(getKey(selected)))
+    // TODO doesnt work, never reaches idx+2
     trySelect(recentFrequent(idx+1))
   })
   // listen for clicks
-  window.addEventListener('mousedown', e => {
-    let key = getKey(e.target)
-    if (key) {
-      info("clicking...", key)
-      stamp(pageKey(key))
-      trySelect(recentFrequent())
-    }
-  })
+  listen()
   // show scores
   scores()
 }
