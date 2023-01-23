@@ -1,18 +1,7 @@
 #!/bin/bash
 
-echo "tony is bro, he sometimes takes mouse and clicks buttons for you"
-echo "but only if you let him, he's very shy"
-echo "you could also have a button to just jump to it, so that you can then move around with tab"
-
-help .cd | indent ">"
-
-function test() {
-  open test.html
-}
-
-function dev() {
-  alert "to debug run (re)load the extension in your browser"
-}
+title "better snapchat video calls for desktop"
+help .cd | indent "> "
 
 function build() {
   rm -rf build && mkdir build
