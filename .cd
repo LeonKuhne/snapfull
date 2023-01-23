@@ -6,11 +6,11 @@ help .cd | indent "> "
 function build() {
   rm -rf build && mkdir build
   cp manifest.json build/
-  cp fast-nav.js build/
-  cp -r icons build/
+  cp snapfull.js build/
+  #cp -r icons build/
 
   # pack extension
-  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --pack-extensions=$(pwd)/build --pack-extension-key=$(pwd)/key.pem
+  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --pack-extensions=$(pwd)/build --pack-extension-key=~/.keys/snapfull.pem
 
   err "TODO: KEY CURRENTLY FAILS TO LOAD"
 }
